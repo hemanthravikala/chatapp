@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale-1.0">
 <title>ChatApp</title>
 <style>
   body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f0f2f5; }
   .container { max-width:500px; margin:50px auto; background:#fff; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
   h2 { text-align:center; }
-  input { width:100%; padding:10px; margin:5px 0; border-radius:5px; border:1px solid #ccc; }
+  input { width:100%; padding:10px; margin:5px 0; border-radius:5px; border:1px solid #ccc; box-sizing: border-box; }
   button { width:100%; padding:10px; margin:10px 0; border-radius:5px; border:none; background:#4CAF50; color:white; font-size:16px; cursor:pointer; }
   button:hover { background:#45a049; }
   #chatBox { height:300px; overflow-y:auto; border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#fafafa; }
@@ -20,7 +20,6 @@
 <body>
 <div class="container">
 
-  <!-- SIGNUP SECTION -->
   <div id="signupSection">
     <h2>Sign Up</h2>
     <input type="text" id="signupName" placeholder="Enter Name">
@@ -28,55 +27,67 @@
     <button onclick="signup()">Send OTP</button>
   </div>
 
-  <!-- OTP VERIFICATION -->
   <div id="otpSection" class="hidden">
     <h2>Verify OTP</h2>
     <input type="text" id="otpInput" placeholder="Enter OTP">
     <button onclick="verifyOTP()">Verify OTP</button>
   </div>
 
-  <!-- LOGIN SECTION -->
   <div id="loginSection" class="hidden">
     <h2>Login</h2>
     <input type="text" id="loginName" placeholder="Enter Name">
     <input type="email" id="loginEmail" placeholder="Enter Email">
     <input type="text" id="loginPassword" placeholder="Enter OTP/Password">
     <button onclick="login()">Login</button>
+    <a href="#" onclick="showSignup()">Need to sign up?</a>
   </div>
 
-  <!-- CHAT SECTION -->
   <div id="chatSection" class="hidden">
     <h2>Chat</h2>
     <div id="chatBox"></div>
     <input type="email" id="recipientEmail" placeholder="Recipient Email">
     <input type="text" id="messageText" placeholder="Type your message">
     <button onclick="sendMessage()">Send Message</button>
+    <button onclick="logout()">Logout</button>
   </div>
 
 </div>
 
 <script>
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxNczbM5f4x1x8aeiU_32-xYRl5JUCZt2u-cxApJpdYZhRB48efzRvulwOlkV1pSd5-/exec";
+// ======================================================================
+// === IMPORTANT: PASTE YOUR NEW DEPLOYMENT URL HERE ===
+// ======================================================================
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz7ACEgLtineu09ysJFC5avBY_XjeCwUjNrMN_WGMaoRXVr0hW_gzLJiEPI1umM3xl7zg/exec"; // <-- REPLACE THIS URL
 
 async function callScript(action, payload){
   payload.action = action;
-  const response = await fetch(WEB_APP_URL, {
-    method:"POST",
-    body:JSON.stringify(payload),
-    headers: {"Content-Type":"application/json"}
-  });
-  return response.json();
+  try {
+    const response = await fetch(WEB_APP_URL, {
+      method:"POST",
+      body:JSON.stringify(payload),
+      headers: {"Content-Type":"application/json"}
+    });
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error("Error calling script:", error);
+    alert("An error occurred. Please check the console for details.");
+    return { status: false, message: "Network or script error." };
+  }
 }
 
 // SIGNUP
 async function signup(){
   const name = document.getElementById("signupName").value;
   const email = document.getElementById("signupEmail").value;
-  if(!name || !email){ alert("Fill all fields"); return; }
+  if(!name || !email){ alert("Please fill in all fields."); return; }
   const result = await callScript("signup", {name, email});
   alert(result.message);
   if(result.status){
     document.getElementById("signupSection").classList.add("hidden");
+    document.getElementById("loginSection").classList.add("hidden");
     document.getElementById("otpSection").classList.remove("hidden");
   }
 }
@@ -86,12 +97,16 @@ async function verifyOTP(){
   const name = document.getElementById("signupName").value;
   const email = document.getElementById("signupEmail").value;
   const otp = document.getElementById("otpInput").value;
-  if(!otp){ alert("Enter OTP"); return; }
+  if(!otp){ alert("Please enter the OTP."); return; }
   const result = await callScript("verifyOTP", {name, email, otp});
   alert(result.message);
   if(result.status){
     document.getElementById("otpSection").classList.add("hidden");
     document.getElementById("loginSection").classList.remove("hidden");
+    // Pre-fill login details for convenience
+    document.getElementById("loginName").value = name;
+    document.getElementById("loginEmail").value = email;
+    document.getElementById("loginPassword").value = otp;
   }
 }
 
@@ -100,13 +115,14 @@ async function login(){
   const name = document.getElementById("loginName").value;
   const email = document.getElementById("loginEmail").value;
   const password = document.getElementById("loginPassword").value;
-  if(!name || !email || !password){ alert("Fill all fields"); return; }
+  if(!name || !email || !password){ alert("Please fill in all fields."); return; }
   const result = await callScript("login", {name, email, password});
   alert(result.message);
   if(result.status){
     localStorage.setItem("name", name);
     localStorage.setItem("email", email);
     localStorage.setItem("password", password);
+    document.getElementById("signupSection").classList.add("hidden");
     document.getElementById("loginSection").classList.add("hidden");
     document.getElementById("chatSection").classList.remove("hidden");
     startFetchingMessages();
@@ -118,35 +134,63 @@ async function sendMessage(){
   const fromEmail = localStorage.getItem("email");
   const toEmail = document.getElementById("recipientEmail").value;
   const message = document.getElementById("messageText").value;
-  if(!toEmail || !message){ alert("Fill recipient and message"); return; }
+  if(!toEmail || !message){ alert("Please enter a recipient and a message."); return; }
   const result = await callScript("sendMessage", {fromEmail, toEmail, message});
-  alert(result.message);
-  document.getElementById("messageText").value = "";
+  if(result.status) {
+    document.getElementById("messageText").value = "";
+    fetchMessages(); // Fetch immediately after sending
+  } else {
+    alert(result.message);
+  }
 }
 
 // FETCH MESSAGES
+let messageInterval;
 async function fetchMessages(){
   const email = localStorage.getItem("email");
+  if (!email) return;
   const messages = await callScript("getMessages", {email});
   const chatBox = document.getElementById("chatBox");
   chatBox.innerHTML = "";
   messages.forEach(msg=>{
-    chatBox.innerHTML += `<div class="message"><b>${msg.from}:</b> ${msg.message}</div>`;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message';
+    messageDiv.innerHTML = `<b>${msg.from}:</b> ${msg.message}`;
+    chatBox.appendChild(messageDiv);
   });
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 function startFetchingMessages(){
+  if (messageInterval) clearInterval(messageInterval); // Clear any existing interval
   fetchMessages();
-  setInterval(fetchMessages, 3000);
+  messageInterval = setInterval(fetchMessages, 5000); // Check every 5 seconds
 }
 
-// AUTO-LOGIN
+function logout() {
+    localStorage.clear();
+    clearInterval(messageInterval);
+    document.getElementById("chatSection").classList.add("hidden");
+    document.getElementById("signupSection").classList.remove("hidden");
+    // Clear login form fields
+    document.getElementById("loginName").value = '';
+    document.getElementById("loginEmail").value = '';
+    document.getElementById("loginPassword").value = '';
+}
+
+function showSignup() {
+    document.getElementById("loginSection").classList.add("hidden");
+    document.getElementById("signupSection").classList.remove("hidden");
+}
+
+// AUTO-LOGIN ON PAGE LOAD
 window.onload = async function(){
   const name = localStorage.getItem("name");
   const email = localStorage.getItem("email");
   const password = localStorage.getItem("password");
+
   if(name && email && password){
+    // Show a loading state if you want
     const result = await callScript("login", {name, email, password});
     if(result.status){
       document.getElementById("signupSection").classList.add("hidden");
@@ -155,7 +199,10 @@ window.onload = async function(){
       startFetchingMessages();
     } else {
       localStorage.clear();
+      document.getElementById("loginSection").classList.remove("hidden");
     }
+  } else {
+    document.getElementById("signupSection").classList.remove("hidden");
   }
 }
 </script>
