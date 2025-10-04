@@ -1,164 +1,205 @@
-// === CONFIG ===
-const ACCOUNTS_SHEET = "Accounts";
-const MESSAGES_SHEET = "Messages";
-const VERIFICATION_SHEET = "Verification";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatApp</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f0f2f5; }
+  .container { max-width:500px; margin:50px auto; background:#fff; padding:20px; border-radius:10px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
+  h2 { text-align:center; }
+  input { width:100%; padding:10px; margin:5px 0; border-radius:5px; border:1px solid #ccc; box-sizing: border-box; }
+  button { width:100%; padding:10px; margin:10px 0; border-radius:5px; border:none; background:#4CAF50; color:white; font-size:16px; cursor:pointer; }
+  button:hover { background:#45a049; }
+  #chatBox { height:300px; overflow-y:auto; border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#fafafa; }
+  .hidden { display:none; }
+  .message { margin:5px 0; }
+  .message b { color:#333; }
+</style>
+</head>
+<body>
+<div class="container">
 
-// === UTILITY FUNCTIONS ===
-function getSheet(sheetName) {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-}
+  <div id="signupSection">
+    <h2>Sign Up</h2>
+    <input type="text" id="signupName" placeholder="Enter Name">
+    <input type="email" id="signupEmail" placeholder="Enter Email">
+    <button onclick="signup()">Send OTP</button>
+  </div>
 
-function generateOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit
-}
+  <div id="otpSection" class="hidden">
+    <h2>Verify OTP</h2>
+    <input type="text" id="otpInput" placeholder="Enter OTP">
+    <button onclick="verifyOTP()">Verify OTP</button>
+  </div>
 
-function getCurrentTime() {
-  return new Date();
-}
+  <div id="loginSection" class="hidden">
+    <h2>Login</h2>
+    <input type="text" id="loginName" placeholder="Enter Name">
+    <input type="email" id="loginEmail" placeholder="Enter Email">
+    <input type="text" id="loginPassword" placeholder="Enter OTP/Password">
+    <button onclick="login()">Login</button>
+    <a href="#" onclick="showSignup()">Need to sign up?</a>
+  </div>
 
-// === SIGNUP → GENERATE OTP ===
-function signupUser(name, email) {
-  const verSheet = getSheet(VERIFICATION_SHEET);
-  const verData = verSheet.getDataRange().getValues();
+  <div id="chatSection" class="hidden">
+    <h2>Chat</h2>
+    <div id="chatBox"></div>
+    <input type="email" id="recipientEmail" placeholder="Recipient Email">
+    <input type="text" id="messageText" placeholder="Type your message">
+    <button onclick="sendMessage()">Send Message</button>
+    <button onclick="logout()">Logout</button>
+  </div>
 
-  for (let i = 1; i < verData.length; i++) {
-    if (verData[i][2] === email && verData[i][4] === "pending") {
-      return {status: false, message: "OTP already sent, check email"};
-    }
-  }
+</div>
 
-  const otp = generateOTP();
-  const tempId = verSheet.getLastRow(); 
-  const time = getCurrentTime();
-  verSheet.appendRow([tempId, name, email, otp, "pending", time]);
+<script>
+// === IMPORTANT: PASTE YOUR LATEST DEPLOYMENT URL HERE ===
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz2rgExb-6WYH_FCVt-w9KoCb6XI0VBbXij-McWrk731hOr5tXM7Ocd_HEq2zZgGCBx/exec"; 
 
-  MailApp.sendEmail(email, "Your OTP for ChatApp", "Your OTP is: " + otp);
-
-  return {status: true, message: "OTP sent successfully"};
-}
-
-// === VERIFY OTP → CREATE ACCOUNT ===
-function verifyOTP(name, email, otp) {
-  const verSheet = getSheet(VERIFICATION_SHEET);
-  const accSheet = getSheet(ACCOUNTS_SHEET);
-  const verData = verSheet.getDataRange().getValues();
-
-  for (let i = 1; i < verData.length; i++) {
-    if (
-      verData[i][1] === name &&
-      verData[i][2] === email &&
-      verData[i][3].toString() === otp.toString() && 
-      verData[i][4] === "pending"
-    ) {
-      const newId = accSheet.getLastRow(); 
-      const createdTime = getCurrentTime();
-      accSheet.appendRow([newId, name, email, otp, createdTime, "active"]);
-
-      verSheet.getRange(i + 1, 5).setValue("verified");
-
-      return {status: true, message: "Account created successfully"};
-    }
-  }
-  return {status: false, message: "OTP verification failed"};
-}
-
-// === LOGIN ===
-function loginUser(name, email, password) {
-  const accSheet = getSheet(ACCOUNTS_SHEET);
-  const accData = accSheet.getDataRange().getValues();
-
-  for (let i = 1; i < accData.length; i++) {
-    if (accData[i][1] === name && accData[i][2] === email && accData[i][3].toString() === password.toString()) {
-      return {status: true, message: "Login successful"};
-    }
-  }
-  return {status: false, message: "Invalid credentials"};
-}
-
-// === SEND MESSAGE ===
-function sendMessage(fromEmail, toEmail, message) {
-  const accSheet = getSheet(ACCOUNTS_SHEET);
-  const accData = accSheet.getDataRange().getValues();
-
-  let recipientExists = false;
-  for (let i = 1; i < accData.length; i++) {
-    if (accData[i][2] === toEmail) {
-      recipientExists = true;
-      break;
-    }
-  }
-  if (!recipientExists) return {status: false, message: "Recipient not found"};
-
-  const msgSheet = getSheet(MESSAGES_SHEET);
-  const timestamp = getCurrentTime();
-  msgSheet.appendRow([fromEmail, toEmail, message, timestamp]);
-  return {status: true, message: "Message sent"};
-}
-
-// === FETCH MESSAGES FOR USER ===
-function getMessages(email) {
-  const msgSheet = getSheet(MESSAGES_SHEET);
-  const msgData = msgSheet.getDataRange().getValues();
-  const userMessages = [];
-
-  for (let i = 1; i < msgData.length; i++) {
-    if (msgData[i][1] === email) { 
-      userMessages.push({
-        from: msgData[i][0],
-        message: msgData[i][2],
-        timestamp: msgData[i][3]
-      });
-    }
-  }
-  return userMessages;
-}
-
-// === MAIN WEB APP ENDPOINTS ===
-
-function doOptions(e) {
-  return ContentService
-    .createTextOutput()
-    .setHeader("Access-Control-Allow-Origin", "*")
-    .setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
-
-function doPost(e) {
-  let response;
+async function callScript(action, payload){
+  payload.action = action;
   try {
-    const data = JSON.parse(e.postData.contents);
-
-    switch (data.action) {
-      case "signup":
-        response = signupUser(data.name, data.email);
-        break;
-      case "verifyOTP":
-        response = verifyOTP(data.name, data.email, data.otp);
-        break;
-      case "login":
-        response = loginUser(data.name, data.email, data.password);
-        break;
-      case "sendMessage":
-        response = sendMessage(data.fromEmail, data.toEmail, data.message);
-        break;
-      case "getMessages":
-        response = getMessages(data.email);
-        break;
-      default:
-        response = {status: false, message: "Invalid action"};
+    const response = await fetch(WEB_APP_URL, {
+      method:"POST",
+      body: JSON.stringify(payload)
+      // No headers object is needed. This sends the request as 'text/plain'.
+    });
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
     }
-  } catch (err) {
-    response = {status: false, message: "Error in script: " + err.message};
+    return response.json();
+  } catch (error) {
+    console.error("Error calling script:", error);
+    alert("An error occurred. Please check the console for details.");
+    return { status: false, message: "Network or script error." };
   }
-
-  return ContentService
-    .createTextOutput(JSON.stringify(response))
-    .setMimeType(Content.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
 }
 
-function doGet(e) {
-  return ContentService
-    .createTextOutput("ChatApp Web App is running")
-    .setMimeType(ContentService.MimeType.TEXT);
+// SIGNUP
+async function signup(){
+  const name = document.getElementById("signupName").value;
+  const email = document.getElementById("signupEmail").value;
+  if(!name || !email){ alert("Please fill in all fields."); return; }
+  const result = await callScript("signup", {name, email});
+  alert(result.message);
+  if(result.status){
+    document.getElementById("signupSection").classList.add("hidden");
+    document.getElementById("loginSection").classList.add("hidden");
+    document.getElementById("otpSection").classList.remove("hidden");
+  }
 }
+
+// VERIFY OTP
+async function verifyOTP(){
+  const name = document.getElementById("signupName").value;
+  const email = document.getElementById("signupEmail").value;
+  const otp = document.getElementById("otpInput").value;
+  if(!otp){ alert("Please enter the OTP."); return; }
+  const result = await callScript("verifyOTP", {name, email, otp});
+  alert(result.message);
+  if(result.status){
+    document.getElementById("otpSection").classList.add("hidden");
+    document.getElementById("loginSection").classList.remove("hidden");
+    document.getElementById("loginName").value = name;
+    document.getElementById("loginEmail").value = email;
+    document.getElementById("loginPassword").value = otp;
+  }
+}
+
+// LOGIN
+async function login(){
+  const name = document.getElementById("loginName").value;
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+  if(!name || !email || !password){ alert("Please fill in all fields."); return; }
+  const result = await callScript("login", {name, email, password});
+  alert(result.message);
+  if(result.status){
+    localStorage.setItem("name", name);
+    localStorage.setItem("email", email);
+    localStorage.setItem("password", password);
+    document.getElementById("signupSection").classList.add("hidden");
+    document.getElementById("loginSection").classList.add("hidden");
+    document.getElementById("chatSection").classList.remove("hidden");
+    startFetchingMessages();
+  }
+}
+
+// SEND MESSAGE
+async function sendMessage(){
+  const fromEmail = localStorage.getItem("email");
+  const toEmail = document.getElementById("recipientEmail").value;
+  const message = document.getElementById("messageText").value;
+  if(!toEmail || !message){ alert("Please enter a recipient and a message."); return; }
+  const result = await callScript("sendMessage", {fromEmail, toEmail, message});
+  if(result.status) {
+    document.getElementById("messageText").value = "";
+    fetchMessages();
+  } else {
+    alert(result.message);
+  }
+}
+
+// FETCH MESSAGES
+let messageInterval;
+async function fetchMessages(){
+  const email = localStorage.getItem("email");
+  if (!email) return;
+  const messages = await callScript("getMessages", {email});
+  const chatBox = document.getElementById("chatBox");
+  chatBox.innerHTML = "";
+  messages.forEach(msg=>{
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message';
+    messageDiv.innerHTML = `<b>${msg.from}:</b> ${msg.message}`;
+    chatBox.appendChild(messageDiv);
+  });
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function startFetchingMessages(){
+  if (messageInterval) clearInterval(messageInterval);
+  fetchMessages();
+  messageInterval = setInterval(fetchMessages, 5000);
+}
+
+function logout() {
+    localStorage.clear();
+    clearInterval(messageInterval);
+    document.getElementById("chatSection").classList.add("hidden");
+    document.getElementById("signupSection").classList.remove("hidden");
+    document.getElementById("loginName").value = '';
+    document.getElementById("loginEmail").value = '';
+    document.getElementById("loginPassword").value = '';
+}
+
+function showSignup() {
+    document.getElementById("loginSection").classList.add("hidden");
+    document.getElementById("signupSection").classList.remove("hidden");
+}
+
+// AUTO-LOGIN ON PAGE LOAD
+window.onload = async function(){
+  const name = localStorage.getItem("name");
+  const email = localStorage.getItem("email");
+  const password = localStorage.getItem("password");
+
+  if(name && email && password){
+    const result = await callScript("login", {name, email, password});
+    if(result.status){
+      document.getElementById("signupSection").classList.add("hidden");
+      document.getElementById("loginSection").classList.add("hidden");
+      document.getElementById("chatSection").classList.remove("hidden");
+      startFetchingMessages();
+    } else {
+      localStorage.clear();
+      document.getElementById("loginSection").classList.remove("hidden");
+    }
+  } else {
+    document.getElementById("signupSection").classList.remove("hidden");
+  }
+}
+</script>
+</body>
+</html>
