@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatApp</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f0f2f5; }
+    .container { max-width: 500px; margin: 50px auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    h2 { text-align: center; }
+    input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 5px; border: 1px solid #ccc; }
+    button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; background: #4CAF50; color: white; font-size: 16px; cursor: pointer; }
+    button:hover { background: #45a049; }
+    #chatBox { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: #fafafa; }
+    .hidden { display: none; }
+    .message { margin: 5px 0; }
+    .message b { color: #333; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- SIGNUP SECTION -->
+    <div id="signupSection">
+      <h2>Sign Up</h2>
+      <input type="text" id="signupName" placeholder="Enter Name" />
+      <input type="email" id="signupEmail" placeholder="Enter Email" />
+      <button onclick="signup()">Send OTP</button>
+    </div>
+
+    <!-- OTP VERIFICATION -->
+    <div id="otpSection" class="hidden">
+      <h2>Verify OTP</h2>
+      <input type="text" id="otpInput" placeholder="Enter OTP" />
+      <button onclick="verifyOTP()">Verify OTP</button>
+    </div>
+
+    <!-- LOGIN SECTION -->
+    <div id="loginSection" class="hidden">
+      <h2>Login</h2>
+      <input type="text" id="loginName" placeholder="Enter Name" />
+      <input type="email" id="loginEmail" placeholder="Enter Email" />
+      <input type="text" id="loginPassword" placeholder="Enter OTP/Password" />
+      <button onclick="login()">Login</button>
+    </div>
+
+    <!-- CHAT SECTION -->
+    <div id="chatSection" class="hidden">
+      <h2>Chat</h2>
+      <div id="chatBox"></div>
+      <input type="email" id="recipientEmail" placeholder="Recipient Email" />
+      <input type="text" id="messageText" placeholder="Type your message" />
+      <button onclick="sendMessage()">Send Message</button>
+    </div>
+
+  </div>
+
+  <script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwzyP5HtCMboaKp-fq4Ts0FTzzJcLug1y7JHJ4lzAr9aVuLpIycV0zYAjnaPdZIWwwu/exec";
+
+    async function callScript(action, payload) {
+      payload.action = action;
+      const response = await fetch(WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" }
+      });
+      return response.json();
+    }
+
+    // SIGNUP
+    async function signup() {
+      const name = document.getElementById("signupName").value;
+      const email = document.getElementById("signupEmail").value;
+      if(!name || !email){ alert("Fill all fields"); return; }
+
+      const result = await callScript("signup", {name, email});
+      alert(result.message);
+      if(result.status){
+        document.getElementById("signupSection").classList.add("hidden");
+        document.getElementById("otpSection").classList.remove("hidden");
+      }
+    }
+
+    // VERIFY OTP
+    async function verifyOTP() {
+      const name = document.getElementById("signupName").value;
+      const email = document.getElementById("signupEmail").value;
+      const otp = document.getElementById("otpInput").value;
+      if(!otp){ alert("Enter OTP"); return; }
+
+      const result = await callScript("verifyOTP", {name, email, otp});
+      alert(result.message);
+      if(result.status){
+        document.getElementById("otpSection").classList.add("hidden");
+        document.getElementById("loginSection").classList.remove("hidden");
+      }
+    }
+
+    // LOGIN
+    async function login() {
+      const name = document.getElementById("loginName").value;
+      const email = document.getElementById("loginEmail").value;
+      const password = document.getElementById("loginPassword").value;
+      if(!name || !email || !password){ alert("Fill all fields"); return; }
+
+      const result = await callScript("login", {name, email, password});
+      alert(result.message);
+      if(result.status){
+        localStorage.setItem("name", name);
+        localStorage.setItem("email", email);
+        localStorage.setItem("password", password);
+
+        document.getElementById("loginSection").classList.add("hidden");
+        document.getElementById("chatSection").classList.remove("hidden");
+        startFetchingMessages();
+      }
+    }
+
+    // SEND MESSAGE
+    async function sendMessage() {
+      const fromEmail = localStorage.getItem("email");
+      const toEmail = document.getElementById("recipientEmail").value;
+      const message = document.getElementById("messageText").value;
+      if(!toEmail || !message){ alert("Fill recipient and message"); return; }
+
+      const result = await callScript("sendMessage", {fromEmail, toEmail, message});
+      alert(result.message);
+      document.getElementById("messageText").value = "";
+    }
+
+    // FETCH MESSAGES
+    async function fetchMessages() {
+      const email = localStorage.getItem("email");
+      const messages = await callScript("getMessages", {email});
+      const chatBox = document.getElementById("chatBox");
+      chatBox.innerHTML = "";
+      messages.forEach(msg => {
+        chatBox.innerHTML += `<div class="message"><b>${msg.from}:</b> ${msg.message}</div>`;
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function startFetchingMessages() {
+      fetchMessages(); // initial fetch
+      setInterval(fetchMessages, 3000); // fetch every 3 seconds
+    }
+
+    // AUTO-LOGIN IF LOCALSTORAGE EXISTS
+    window.onload = async function(){
+      const name = localStorage.getItem("name");
+      const email = localStorage.getItem("email");
+      const password = localStorage.getItem("password");
+      if(name && email && password){
+        const result = await callScript("login", {name, email, password});
+        if(result.status){
+          document.getElementById("signupSection").classList.add("hidden");
+          document.getElementById("loginSection").classList.add("hidden");
+          document.getElementById("chatSection").classList.remove("hidden");
+          startFetchingMessages();
+        } else {
+          localStorage.clear();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
